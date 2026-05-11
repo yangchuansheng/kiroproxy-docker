@@ -148,6 +148,9 @@ jobs:
           for i in $(seq 1 30); do
             code="$(curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/status || true)"
             if [ "$code" = "200" ]; then
+              models="$(curl -fsS http://127.0.0.1:18080/v1/models)"
+              grep -q 'claude-opus-4.6' <<<"$models"
+              grep -q 'claude-opus-4.7' <<<"$models"
               echo "Smoke test passed"
               exit 0
             fi

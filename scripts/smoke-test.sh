@@ -17,7 +17,10 @@ docker run -d --name "$NAME" -p "${PORT}:8080" "$IMAGE" >/dev/null
 for _ in $(seq 1 30); do
   code="$(curl -fsS -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/api/status" || true)"
   if [ "$code" = "200" ]; then
-    echo "Smoke test passed: /api/status returned 200"
+    models="$(curl -fsS "http://127.0.0.1:${PORT}/v1/models")"
+    grep -q 'claude-opus-4.6' <<<"$models"
+    grep -q 'claude-opus-4.7' <<<"$models"
+    echo "Smoke test passed: /api/status returned 200 and Opus 4.6/4.7 models are listed"
     exit 0
   fi
   sleep 1
