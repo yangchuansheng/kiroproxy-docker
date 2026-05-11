@@ -1,0 +1,22 @@
+services:
+  kiroproxy:
+    image: ghcr.io/yangchuansheng/kiroproxy:latest
+    build:
+      context: .
+      dockerfile: Containerfile
+      args:
+        KIROPROXY_REF: ${KIROPROXY_REF:-main}
+    restart: unless-stopped
+    ports:
+      - "${KIROPROXY_PORT:-8080}:8080"
+    environment:
+      PORT: 8080
+      # Optional: set when credentials do not include profileArn.
+      # KIRO_PROFILE_ARN: "arn:aws:..."
+    volumes:
+      - kiroproxy-data:/data
+      # Optional: reuse local Kiro/AWS SSO cache instead of importing accounts through the UI.
+      # - ~/.aws/sso/cache:/data/.aws/sso/cache:ro
+
+volumes:
+  kiroproxy-data:

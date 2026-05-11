@@ -1,0 +1,145 @@
+name: Build KiroProxy image
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag to publish
+        required: true
+        default: latest
+      kiroproxy_ref:
+        description: KiroProxy branch, tag, or commit SHA
+        required: true
+        default: main
+      platforms:
+        description: Target platforms
+        required: true
+        default: linux/amd64
+  push:
+    branches:
+      - main
+    paths:
+      - Containerfile
+      - entrypoint.sh
+      - docker-compose.yml
+      - .dockerignore
+      - .github/workflows/build.yml
+      - scripts/**
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/kiroproxy
+  KIROPROXY_REPO: https://github.com/petehsu/KiroProxy.git
+
+jobs:
+  build:
+    name: Build and push image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout image recipe
+        uses: actions/checkout@v4
+
+      - name: Resolve KiroProxy revision
+        id: revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          requested_ref="${{ github.event.inputs.kiroproxy_ref || 'main' }}"
+          remote="${KIROPROXY_REPO}"
+
+          if [[ "$requested_ref" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            upstream_sha="$requested_ref"
+          else
+            upstream_sha="$(git ls-remote "$remote" "refs/heads/${requested_ref}" | awk '{print $1}' | head -n1)"
+            if [ -z "$upstream_sha" ]; then
+              upstream_sha="$(git ls-remote "$remote" "refs/tags/${requested_ref}" | awk '{print $1}' | head -n1)"
+            fi
+            if [ -z "$upstream_sha" ]; then
+              upstream_sha="$(git ls-remote "$remote" "$requested_ref" | awk '{print $1}' | head -n1)"
+            fi
+          fi
+
+          if [ -z "$upstream_sha" ]; then
+            echo "Could not resolve KiroProxy ref: $requested_ref" >&2
+            exit 1
+          fi
+
+          echo "requested_ref=$requested_ref" >> "$GITHUB_OUTPUT"
+          echo "upstream_sha=$upstream_sha" >> "$GITHUB_OUTPUT"
+          echo "upstream_short_sha=${upstream_sha:0:12}" >> "$GITHUB_OUTPUT"
+          echo "cache_bust=$upstream_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ github.event.inputs.image_tag || 'latest' }}
+            type=raw,value=upstream-${{ steps.revisions.outputs.upstream_short_sha }}
+            type=sha,prefix=recipe-
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Containerfile
+          platforms: ${{ github.event.inputs.platforms || 'linux/amd64' }}
+          push: true
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            KIROPROXY_REPO=${{ env.KIROPROXY_REPO }}
+            KIROPROXY_REF=${{ steps.revisions.outputs.upstream_sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=KiroProxy
+            org.opencontainers.image.description=Container image for petehsu/KiroProxy
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            io.kiroproxy.upstream.source=https://github.com/petehsu/KiroProxy
+            io.kiroproxy.upstream.ref=${{ steps.revisions.outputs.requested_ref }}
+            io.kiroproxy.upstream.revision=${{ steps.revisions.outputs.upstream_sha }}
+
+      - name: Smoke test image
+        if: ${{ github.event.inputs.platforms == '' || github.event.inputs.platforms == 'linux/amd64' || github.event_name != 'workflow_dispatch' }}
+        shell: bash
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ github.event.inputs.image_tag || 'latest' }}
+        run: |
+          set -euo pipefail
+          docker run -d --name kiroproxy-smoke -p 18080:8080 "$IMAGE"
+          trap 'docker logs kiroproxy-smoke || true; docker rm -f kiroproxy-smoke >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            code="$(curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/status || true)"
+            if [ "$code" = "200" ]; then
+              echo "Smoke test passed"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Smoke test failed" >&2
+          exit 1
