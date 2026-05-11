@@ -62,6 +62,7 @@ Inputs:
 
 - The container listens on port `8080` by default.
 - `HOME` is set to `/data`, so KiroProxy reads and writes `/data/.kiro-proxy` and `/data/.aws/sso/cache`.
+- The entrypoint starts as root only long enough to create and fix ownership of `/data`, then drops privileges to the `kiroproxy` user before launching the app.
 - If imported credentials lack `profileArn`, set `KIRO_PROFILE_ARN` in `docker-compose.yml` or the container environment.
 
 ## Smoke test

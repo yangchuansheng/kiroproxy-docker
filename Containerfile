@@ -20,12 +20,12 @@ ARG KIROPROXY_REPO
 ARG KIROPROXY_REF
 LABEL org.opencontainers.image.title="KiroProxy"       org.opencontainers.image.description="Container image for petehsu/KiroProxy"       org.opencontainers.image.source="https://github.com/petehsu/KiroProxy"       org.opencontainers.image.url="https://github.com/petehsu/KiroProxy"
 ENV PYTHONDONTWRITEBYTECODE=1     PYTHONUNBUFFERED=1     VIRTUAL_ENV=/opt/venv     PATH=/opt/venv/bin:$PATH     HOME=/data     PORT=8080
-RUN apt-get update   && apt-get install -y --no-install-recommends ca-certificates tini   && rm -rf /var/lib/apt/lists/*   && groupadd --system --gid 10001 kiroproxy   && useradd --system --uid 10001 --gid kiroproxy --home-dir /data --shell /usr/sbin/nologin kiroproxy   && mkdir -p /app /data/.kiro-proxy /data/.aws/sso/cache   && chown -R kiroproxy:kiroproxy /app /data
+RUN apt-get update   && apt-get install -y --no-install-recommends ca-certificates tini gosu   && rm -rf /var/lib/apt/lists/*   && groupadd --system --gid 10001 kiroproxy   && useradd --system --uid 10001 --gid kiroproxy --home-dir /data --shell /usr/sbin/nologin kiroproxy   && mkdir -p /app /data/.kiro-proxy /data/.aws/sso/cache   && chown -R kiroproxy:kiroproxy /app /data
 COPY --from=builder --chown=kiroproxy:kiroproxy /opt/venv /opt/venv
 COPY --from=source --chown=kiroproxy:kiroproxy /src /app
 COPY --chown=root:root entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
-USER kiroproxy
+USER root
 WORKDIR /app
 VOLUME ["/data"]
 EXPOSE 8080
