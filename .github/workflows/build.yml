@@ -78,6 +78,18 @@ jobs:
           echo "upstream_short_sha=${upstream_sha:0:12}" >> "$GITHUB_OUTPUT"
           echo "cache_bust=$upstream_sha" >> "$GITHUB_OUTPUT"
 
+      - name: Validate model mapping patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
+          git clone --filter=blob:none --no-checkout "${KIROPROXY_REPO}" "$tmp_dir/KiroProxy"
+          git -C "$tmp_dir/KiroProxy" fetch --depth 1 origin "${{ steps.revisions.outputs.upstream_sha }}"
+          git -C "$tmp_dir/KiroProxy" checkout --detach FETCH_HEAD
+          python scripts/patch_kiroproxy_models.py "$tmp_dir/KiroProxy"
+          python scripts/validate_model_patch.py "$tmp_dir/KiroProxy"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 

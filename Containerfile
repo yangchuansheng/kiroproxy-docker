@@ -6,7 +6,8 @@ FROM python:${PYTHON_VERSION}-slim AS source
 ARG KIROPROXY_REPO
 ARG KIROPROXY_REF
 WORKDIR /src
-RUN apt-get update   && apt-get install -y --no-install-recommends ca-certificates git   && rm -rf /var/lib/apt/lists/*   && git init   && git remote add origin "${KIROPROXY_REPO}"   && git fetch --depth 1 origin "${KIROPROXY_REF}"   && git checkout --detach FETCH_HEAD   && rm -rf .git
+COPY scripts/patch_kiroproxy_models.py /tmp/patch_kiroproxy_models.py
+RUN apt-get update   && apt-get install -y --no-install-recommends ca-certificates git   && rm -rf /var/lib/apt/lists/*   && git init   && git remote add origin "${KIROPROXY_REPO}"   && git fetch --depth 1 origin "${KIROPROXY_REF}"   && git checkout --detach FETCH_HEAD   && rm -rf .git   && python /tmp/patch_kiroproxy_models.py /src
 
 FROM python:${PYTHON_VERSION}-slim AS builder
 ENV VIRTUAL_ENV=/opt/venv     PATH=/opt/venv/bin:$PATH     PIP_DISABLE_PIP_VERSION_CHECK=1     PIP_NO_CACHE_DIR=1

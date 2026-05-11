@@ -15,6 +15,18 @@ ghcr.io/yangchuansheng/kiroproxy:latest
 - `docker-compose.yml` provides a simple persistent runtime using `/data` as the container home.
 - `entrypoint.sh` starts the service in headless mode and keeps KiroProxy config under `/data`.
 
+## Image patches
+
+The image build applies a small runtime patch to upstream KiroProxy before installing dependencies:
+
+- Adds `claude-opus-4.6` and `claude-opus-4.7` to `KIRO_MODELS`.
+- Preserves exact passthrough for those model IDs.
+- Maps `opus`, `opus-4.7`, and `claude-4-opus` to `claude-opus-4.7`.
+- Maps `opus-4.6` to `claude-opus-4.6`.
+- Adds both IDs to the `/v1/models` static fallback list.
+
+The workflow validates this patch before building the image.
+
 ## Manual build
 
 ```bash
